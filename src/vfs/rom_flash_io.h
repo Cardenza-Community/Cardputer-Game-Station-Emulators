@@ -5,6 +5,12 @@
 #include <stdbool.h>
 #include "esp_partition.h"
 
+#ifdef CARDENZA_TARGET
+#define ROM_PARTITION_LABEL "cardenza_rom"
+#else
+#define ROM_PARTITION_LABEL "spiffs"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

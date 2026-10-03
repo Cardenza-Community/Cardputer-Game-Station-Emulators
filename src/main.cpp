@@ -28,8 +28,26 @@
 #include "esp_task_wdt.h"
 #include "share/input.h"
 #include "share/emu_log_cpp.h"
+#ifdef CARDENZA_TARGET
+#include "cardenza_hal.h"
+#include <HWCDC.h>
+#if ARDUINO_USB_CDC_ON_BOOT
+#define CARDENZA_STARTUP_SERIAL Serial
+#else
+#define CARDENZA_STARTUP_SERIAL USBSerial
+#endif
+#endif
 
 void setup() {
+#ifdef CARDENZA_TARGET
+  CARDENZA_STARTUP_SERIAL.begin(115200);
+  delay(200);
+  CARDENZA_STARTUP_SERIAL.println("[Cardenza] GameStation startup; initializing ES8156");
+  // Initialize the external codec before another driver claims I2C 1/2.
+  cardenza_hal_led_off();
+  const bool codecReady = cardenza_hal_init(32, 16);
+  CARDENZA_STARTUP_SERIAL.printf("[Cardenza] ES8156 setup: %s\n", codecReady ? "OK" : "FAILED");
+#endif
   // Set high priority for the current task (where the emulator will run)
   vTaskPrioritySet(NULL, 19);
 
@@ -44,11 +62,22 @@ void setup() {
 
   auto cfg = M5.config();
   cfg.output_power = true;
+#ifdef CARDENZA_TARGET
+  cfg.internal_imu = false;
+  cfg.external_imu = false;
+  cfg.fallback_board = m5::board_t::board_M5Cardputer;
+#endif
   M5Cardputer.begin(cfg);
+#ifdef CARDENZA_TARGET
+  CARDENZA_STARTUP_SERIAL.println("[Cardenza] M5 ready");
+#endif
   CardputerInput input;
   SdService sd;
   CardputerView display;
   display.initialize();
+#ifdef CARDENZA_TARGET
+  CARDENZA_STARTUP_SERIAL.println("[Cardenza] display ready; mounting SD");
+#endif
 
   // SD
   while (!sd.begin()) {
@@ -82,12 +111,16 @@ void setup() {
   display.topBar("COPYING ROM TO FLASH", false, false);
   display.subMessage("Loading...", 0);
   
-  // Find the rom partition (SPIFFS)
-  const esp_partition_t* romPart = findRomPartition("spiffs");
+  // Cardenza uses dedicated raw scratch; upstream uses its SPIFFS partition.
+  const esp_partition_t* romPart = findRomPartition(ROM_PARTITION_LABEL);
   if (!romPart) {
     while (1) {
       display.topBar("ERROR", false, false);
+#ifdef CARDENZA_TARGET
+      display.subMessage("No valid ROM scratch", 0);
+#else
       display.subMessage("No ROM partition", 0);
+#endif
       delay(1500);
     }
   }
@@ -97,9 +130,17 @@ void setup() {
   if (!copyFileToPartition(romPath.c_str(), romPart, &romSize, CardputerView::copyProgress, &display)) {    
     // Rom limit is reached for the current SPIFFS layout
     while (1) {
+#ifdef CARDENZA_TARGET
+        display.topBar("ROM LOAD FAILED", false, false);
+        char scratchLimit[40];
+        snprintf(scratchLimit, sizeof(scratchLimit), "ROM limit: %u KiB", (unsigned)(romPart->size / 1024));
+        display.subMessage(scratchLimit, 2000);
+        display.subMessage("Check ROM / SD card", 2000);
+#else
         display.topBar("ROM IS TOO HEAVY", false, false);
         display.subMessage("If you're using launcher",2000);
         display.subMessage("Increase SPIFFS layout", 2000);
+#endif
         delay(1500);
     }
   }
@@ -107,7 +148,7 @@ void setup() {
   input.flushInput(10); // flush any input just in case
 
   // Map the ROM partition in XIP
-  if (xip_map_rom_partition("spiffs", romSize) != 0) {
+  if (xip_map_rom_partition(ROM_PARTITION_LABEL, romSize) != 0) {
     while (1) {
       display.topBar("ERROR", false, false);
       display.subMessage("Map ROM failed", 0);

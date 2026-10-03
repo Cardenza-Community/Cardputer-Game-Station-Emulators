@@ -15,7 +15,8 @@
 /*************************************************************/
 
 #include "MSX.h"
-#include "Sound.h"
+/* Explicit path avoids Arnold's lowercase sound.h on Windows. */
+#include "../EMULib/Sound.h"
 #ifndef NO_FLOPPY
 #include "Floppy.h"
 #endif
