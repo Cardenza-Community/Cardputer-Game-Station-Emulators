@@ -5,9 +5,13 @@
 #include <stdbool.h>
 #include "esp_partition.h"
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+bool gameStationIsCardenza(void);
+#define ROM_PARTITION_LABEL (gameStationIsCardenza() ? "cardenza_rom" : "spiffs")
 
 typedef void (*CopyProgressCallback)(size_t total, size_t current, void* user_ctx);
 

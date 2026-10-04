@@ -1,6 +1,7 @@
 #pragma GCC optimize ("Os")
 
 #include "rom_xip.h"
+#include "rom_flash_io.h"
 #include "esp_partition.h"
 #include "esp_spi_flash.h"
 #include "esp_log.h"
@@ -18,10 +19,13 @@ int xip_map_rom_partition(const char *part_name, size_t rom_size_effective)
     const esp_partition_t *p;
     const void *ptr = NULL;
 
-    if (part_name == NULL)
-        part_name = "rom";
-
+if (gameStationIsCardenza()) {
+    if (!part_name) part_name = ROM_PARTITION_LABEL;
+    p = findRomPartition(part_name);
+} else {
+    if (!part_name) part_name = "rom";
     p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, part_name);
+}
     if (!p) {
         ESP_LOGE("ROM_XIP", "Partition '%s' not found", part_name);
         return -1;
